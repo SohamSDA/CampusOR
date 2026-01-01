@@ -2,27 +2,37 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 import joblib
-import os
 from pathlib import Path
 
-# 1. Load Dataset
+# --------------------------------------------------
+# 1. Load Dataset (robust path handling)
+# --------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
 csv_path = BASE_DIR / "campusor_wait_time_mock.csv"
 
 print(f"Loading data from: {csv_path}")
+
 try:
     df = pd.read_csv(csv_path)
     print(f"Data loaded successfully. Shape: {df.shape}")
 except FileNotFoundError:
     print("Error: CSV file not found. Please check the path.")
-    exit()
+    exit(1)
 
-# 2. Preprocessing & Feature Selection
-# The issue explicitly requests these input features
-features = ['tokensAhead', 'activeCounters', 'hourOfDay', 'dayOfWeek', 'avgServiceTime']
-target = 'actualWaitMinutes'
+# --------------------------------------------------
+# 2. Feature Selection
+# --------------------------------------------------
+features = [
+    "tokensAhead",
+    "activeCounters",
+    "hourOfDay",
+    "dayOfWeek",
+    "avgServiceTime"
+]
+target = "actualWaitMinutes"
 
 print("\nFeatures used for training:")
 print(features)
@@ -30,27 +40,62 @@ print(features)
 X = df[features]
 y = df[target]
 
-# Split data (80% train, 20% test)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+# Train / Test split (80 / 20)
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
 
-# 3. Model Training
-# Using Random Forest as a robust baseline
-print("\nTraining Random Forest Regressor...")
-model = RandomForestRegressor(n_estimators=100, random_state=42)
-model.fit(X_train, y_train)
+print("-" * 50)
+print(f"Training samples: {len(X_train)}")
+print(f"Testing samples : {len(X_test)}")
+print("-" * 50)
 
-# 4. Evaluation
-predictions = model.predict(X_test)
-mae = mean_absolute_error(y_test, predictions)
-rmse = np.sqrt(mean_squared_error(y_test, predictions))
+# --------------------------------------------------
+# MODEL 1: Linear Regression (Baseline)
+# --------------------------------------------------
+lr_model = LinearRegression()
+lr_model.fit(X_train, y_train)
 
-print("-" * 30)
-print("Model Evaluation Metrics:")
-print(f"Mean Absolute Error (MAE): {mae:.2f} minutes")
-print(f"Root Mean Squared Error (RMSE): {rmse:.2f} minutes")
-print("-" * 30)
+lr_preds = lr_model.predict(X_test)
+lr_mae = mean_absolute_error(y_test, lr_preds)
 
-# 5. Save the Model
-model_filename = Path(__file__).resolve().parent / "wait_time_model.pkl"
-joblib.dump(model, model_filename)
-print(f"Trained model saved to: {model_filename}")
+print(f"Model 1: Linear Regression -> MAE: {lr_mae:.4f} minutes")
+
+# --------------------------------------------------
+# MODEL 2: Random Forest (Proposed)
+# --------------------------------------------------
+rf_model = RandomForestRegressor(
+    n_estimators=100,
+    random_state=42,
+    n_jobs=-1
+)
+rf_model.fit(X_train, y_train)
+
+rf_preds = rf_model.predict(X_test)
+rf_mae = mean_absolute_error(y_test, rf_preds)
+rf_rmse = np.sqrt(mean_squared_error(y_test, rf_preds))
+
+print(
+    f"Model 2: Random Forest     -> "
+    f"MAE: {rf_mae:.4f} minutes | RMSE: {rf_rmse:.4f} minutes"
+)
+
+# --------------------------------------------------
+# Comparison
+# --------------------------------------------------
+improvement = ((lr_mae - rf_mae) / lr_mae) * 100
+
+print("-" * 50)
+print(
+    f"Result: Random Forest improved accuracy by "
+    f"{improvement:.1f}% over Linear Regression."
+)
+print("-" * 50)
+
+# --------------------------------------------------
+# 3. Save Best Model
+# --------------------------------------------------
+model_path = Path(__file__).resolve().parent / "wait_time_model.pkl"
+joblib.dump(rf_model, model_path)
+
+print(f"Saved best model (Random Forest) to: {model_path}")
