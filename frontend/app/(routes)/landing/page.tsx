@@ -57,7 +57,7 @@ export default function LandingPage() {
         <div className="mt-6 flex gap-4">
           {isAuthenticated ? (
             <Link
-              href="/dashboard"
+              href="/dashboard/user"
               className="bg-black text-white px-6 py-3 rounded-md cursor-pointer hover:bg-gray-800 transition-colors"
             >
               Go to Dashboard
