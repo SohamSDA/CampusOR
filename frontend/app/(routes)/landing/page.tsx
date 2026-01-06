@@ -80,9 +80,9 @@ export default function LandingPage() {
           <div className="flex items-center justify-between relative z-30">
             <Link href="/landing" className="flex items-center gap-3 group">
               <img
-                src="/logo/LOGO.svg"
+                src="/logo/LOGO-removebg-preview.png"
                 alt="CampusOR logo"
-                className="h-11 w-auto object-contain drop-shadow-[0_4px_12px_rgba(15,23,42,0.18)] transition-transform duration-300 group-hover:scale-[1.03] md:h-14"
+                className="h-24 w-auto object-contain drop-shadow-[0_4px_12px_rgba(15,23,42,0.18)] z-50 transition-transform duration-300 group-hover:scale-[1.03] md:h-24"
               />
             </Link>
 
