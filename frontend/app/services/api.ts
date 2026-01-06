@@ -6,6 +6,9 @@ class ApiService {
   }
 
   private getAuthHeaders(): HeadersInit {
+
+    if (typeof window === 'undefined') return {};
+
     const token = localStorage.getItem('campusor_jwt');
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
@@ -60,6 +63,29 @@ class ApiService {
     }
 
     return response.json();
+  }
+
+  async patch(endpoint: string, data: any, includeAuth: boolean = true) {
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      method: 'PATCH',
+      headers: includeAuth ? this.getAuthHeaders() : { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    }
+
+    // Handle possible empty or non-JSON responses gracefully
+    if (response.status === 204) {
+      return null;
+    }
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.toLowerCase().includes('application/json')) {
+      return null;
+    }
+    return response.json().catch(() => null);
   }
 
   async delete(endpoint: string, includeAuth: boolean = true) {

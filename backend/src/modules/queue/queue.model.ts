@@ -3,6 +3,7 @@ import mongoose, { Schema, Document, trusted } from 'mongoose';
 ////////////////////////-----------QUEUE ----------------
 export interface IQueue extends Document {
   name: string;
+  location: string;
   isActive: boolean;
   nextSequence: number;
   operator?: mongoose.Types.ObjectId; // ✅ NEW
@@ -16,7 +17,12 @@ const queueSchema = new Schema<IQueue>(
       type: String,
       required: true,
     },
-
+    // [ADDED] Location field
+    location: {
+      type: String,
+      required: true,
+      trim: true,
+    },
     // ✅ OPERATOR WHO CREATED THE QUEUE
     operator: {
       type: Schema.Types.ObjectId,
@@ -38,7 +44,8 @@ const queueSchema = new Schema<IQueue>(
   { timestamps: true }
 );
 
-queueSchema.index({ name: 1 }, { unique: true });
+// [UPDATED] Unique index on name + location
+queueSchema.index({ name: 1, location: 1 }, { unique: true });
 queueSchema.index({ isActive: 1 });
 
 
