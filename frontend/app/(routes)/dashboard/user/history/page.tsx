@@ -1,0 +1,265 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import {
+  History,
+  Clock,
+  MapPin,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+} from "lucide-react";
+import { userQueueService } from "../../../../../lib/services/userQueueService";
+
+// Types matching backend schema
+interface QueueHistoryItem {
+  id: string;
+  queueId: string;
+  queueName: string;
+  location: string;
+  tokenNumber: string;
+  joinedAt: string;
+  servedAt?: string;
+  cancelledAt?: string;
+  status: "served" | "cancelled" | "completed";
+  waitTime: number; // in minutes
+  serviceTime?: number; // in minutes
+}
+
+// Mock data for UI rendering - clearly marked for easy transition to real API
+const mockHistoryData: QueueHistoryItem[] = [
+  {
+    id: "1",
+    queueId: "q1",
+    queueName: "Cafeteria Lunch Queue",
+    location: "Main Cafeteria - Building A",
+    tokenNumber: "C042",
+    joinedAt: "2024-01-15T12:30:00Z",
+    servedAt: "2024-01-15T12:45:00Z",
+    status: "served",
+    waitTime: 15,
+    serviceTime: 8,
+  },
+  {
+    id: "2",
+    queueId: "q2",
+    queueName: "Library Computer Lab",
+    location: "Central Library - 2nd Floor",
+    tokenNumber: "L128",
+    joinedAt: "2024-01-14T14:20:00Z",
+    cancelledAt: "2024-01-14T15:00:00Z",
+    status: "cancelled",
+    waitTime: 40,
+  },
+  {
+    id: "3",
+    queueId: "q3",
+    queueName: "Student Services",
+    location: "Admin Building - Ground Floor",
+    tokenNumber: "S067",
+    joinedAt: "2024-01-13T10:15:00Z",
+    servedAt: "2024-01-13T10:35:00Z",
+    status: "completed",
+    waitTime: 20,
+    serviceTime: 15,
+  },
+  {
+    id: "4",
+    queueId: "q4",
+    queueName: "Health Center",
+    location: "Medical Building - 1st Floor",
+    tokenNumber: "H091",
+    joinedAt: "2024-01-12T09:00:00Z",
+    servedAt: "2024-01-12T09:25:00Z",
+    status: "served",
+    waitTime: 25,
+    serviceTime: 12,
+  },
+];
+
+export default function HistoryPage() {
+  const [historyData, setHistoryData] = useState<QueueHistoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchQueueHistory();
+  }, []);
+
+  const fetchQueueHistory = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      setHistoryData(mockHistoryData);
+    } catch (err) {
+      console.error("Error fetching queue history:", err);
+      setError("Failed to load queue history. Please try again.");
+
+      setHistoryData(mockHistoryData);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "served":
+      case "completed":
+        return <CheckCircle className="w-5 h-5 text-green-600" />;
+      case "cancelled":
+        return <XCircle className="w-5 h-5 text-red-600" />;
+      default:
+        return <AlertCircle className="w-5 h-5 text-yellow-600" />;
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    const baseClasses = "px-3 py-1 rounded-full text-xs font-medium";
+    switch (status) {
+      case "served":
+      case "completed":
+        return `${baseClasses} bg-green-100 text-green-800`;
+      case "cancelled":
+        return `${baseClasses} bg-red-100 text-red-800`;
+      default:
+        return `${baseClasses} bg-yellow-100 text-yellow-800`;
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <History className="w-6 h-6 text-blue-600" />
+          <h1 className="text-2xl font-bold text-gray-900">Queue History</h1>
+        </div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+          <div className="flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="ml-3 text-gray-600">Loading queue history...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <History className="w-6 h-6 text-blue-600" />
+        <h1 className="text-2xl font-bold text-gray-900">Queue History</h1>
+      </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 text-yellow-600" />
+            <span className="text-yellow-800">{error}</span>
+          </div>
+        </div>
+      )}
+
+      {/* History List */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        {historyData.length === 0 ? (
+          <div className="p-8 text-center">
+            <History className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              No Queue History
+            </h3>
+            <p className="text-gray-600">
+              You haven't joined any queues yet. Your queue history will appear
+              here once you start using the system.
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-200">
+            {historyData.map((item) => (
+              <div
+                key={item.id}
+                className="p-6 hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        {item.queueName}
+                      </h3>
+                      {getStatusIcon(item.status)}
+                      <span className={getStatusBadge(item.status)}>
+                        {item.status.charAt(0).toUpperCase() +
+                          item.status.slice(1)}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 text-sm text-gray-600">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4" />
+                        <span>{item.location}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-900">
+                          Token:
+                        </span>
+                        <span className="bg-gray-100 px-2 py-1 rounded font-mono">
+                          {item.tokenNumber}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4" />
+                        <span>Joined: {formatDate(item.joinedAt)}</span>
+                      </div>
+                      {item.servedAt && (
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-green-600" />
+                          <span>Served: {formatDate(item.servedAt)}</span>
+                        </div>
+                      )}
+                      {item.cancelledAt && (
+                        <div className="flex items-center gap-2">
+                          <XCircle className="w-4 h-4 text-red-600" />
+                          <span>Cancelled: {formatDate(item.cancelledAt)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-right ml-6">
+                    <div className="text-sm text-gray-600 mb-1">Wait Time</div>
+                    <div className="text-2xl font-bold text-blue-600">
+                      {item.waitTime}m
+                    </div>
+                    {item.serviceTime && (
+                      <>
+                        <div className="text-sm text-gray-600 mb-1 mt-2">
+                          Service Time
+                        </div>
+                        <div className="text-lg font-semibold text-green-600">
+                          {item.serviceTime}m
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

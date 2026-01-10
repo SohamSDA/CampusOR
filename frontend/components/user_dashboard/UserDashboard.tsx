@@ -1,6 +1,7 @@
 "use client";
 import { useQueueToasts } from "@/app/services/useToast";
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   userDashboardMock,
   userNearTurnMock,
@@ -20,14 +21,6 @@ import {
   Bell,
   Activity,
   TrendingUp,
-  Menu,
-  X,
-  LayoutDashboard,
-  CalendarClock,
-  History,
-  ListChecks,
-  Settings,
-  LogOut,
 } from "lucide-react";
 
 type MockState = "waiting" | "near" | "served" | "cancelled" | "no-queue";
@@ -88,8 +81,6 @@ export default function UserDashboard({
 }: UserDashboardProps = {}) {
   const [currentState, setCurrentState] = useState<MockState>("waiting");
   const [formattedTime, setFormattedTime] = useState<string>("");
-  const [isRescheduleOpen, setIsRescheduleOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   useQueueToasts(currentState);
 
   const getMockDataForState = (state: MockState): DashboardData => {
@@ -150,14 +141,6 @@ export default function UserDashboard({
     }, 3000);
   };
 
-  const handleReschedule = () => {
-    setIsRescheduleOpen(true);
-    setTimeout(() => {
-      setIsRescheduleOpen(false);
-      alert("Reschedule requested! (Mock action)");
-    }, 1500);
-  };
-
   const getStatusText = (status: string) => {
     switch (status) {
       case "waiting":
@@ -196,90 +179,7 @@ export default function UserDashboard({
   const activeData = data as UserDashboardData;
 
   return (
-    <div className="flex h-screen bg-slate-50">
-      {/* Navigation Sidebar */}
-      <aside
-        className={`${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        } lg:translate-x-0 fixed lg:relative w-64 h-full bg-white border-r border-slate-200 transition-transform duration-300 z-50`}
-      >
-        {/* Logo/Brand */}
-        <div className="p-6 border-b border-slate-200">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-sky-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-lg">C</span>
-            </div>
-            <div>
-              <h2 className="font-bold text-lg">CampusOR</h2>
-              <p className="text-xs text-slate-500">Queue Management</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Navigation Menu */}
-        <nav className="p-4 space-y-2">
-          <button className="w-full flex items-center gap-3 px-4 py-3 bg-sky-50 text-sky-600 rounded-xl font-medium transition-all duration-300 hover:scale-105 hover:shadow-md">
-            <LayoutDashboard className="w-5 h-5" />
-            <span>Overview</span>
-          </button>
-          <button className="w-full flex items-center gap-3 px-4 py-3 text-slate-600 hover:bg-slate-50 rounded-xl font-medium transition-all duration-300 hover:scale-105">
-            <CalendarClock className="w-5 h-5" />
-            <span>My Queues</span>
-          </button>
-          <button className="w-full flex items-center gap-3 px-4 py-3 text-slate-600 hover:bg-slate-50 rounded-xl font-medium transition-all duration-300 hover:scale-105">
-            <History className="w-5 h-5" />
-            <span>History</span>
-          </button>
-          <button className="w-full flex items-center gap-3 px-4 py-3 text-slate-600 hover:bg-slate-50 rounded-xl font-medium transition-all duration-300 hover:scale-105">
-            <ListChecks className="w-5 h-5" />
-            <span>Available Queues</span>
-          </button>
-          <button className="w-full flex items-center gap-3 px-4 py-3 text-slate-600 hover:bg-slate-50 rounded-xl font-medium transition-all duration-300 hover:scale-105">
-            <Bell className="w-5 h-5" />
-            <span>Notifications</span>
-          </button>
-        </nav>
-
-        {/* User Profile at Bottom */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-200 space-y-2">
-          
-          <button className="w-full flex items-center gap-3 px-4 py-3 text-slate-600 hover:bg-slate-50 rounded-xl transition-all duration-300 hover:scale-105">
-            <LogOut className="w-5 h-5" />
-            <span>Log out</span>
-          </button>
-          <div className="mt-4 flex items-center gap-3 px-2">
-            <div className="w-10 h-10 bg-sky-600 rounded-full flex items-center justify-center text-white font-semibold">
-              {activeData.user.name.charAt(0)}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-sm truncate">
-                {activeData.user.name}
-              </p>
-              <p className="text-xs text-slate-500">
-                {sidebarMockData.userProfile.studentId}
-              </p>
-            </div>
-          </div>
-        </div>
-      </aside>
-
-      {/* Mobile menu toggle */}
-      <button
-        onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="lg:hidden fixed top-4 left-4 z-50 bg-white p-2 rounded-lg shadow-lg border border-slate-200"
-      >
-        {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-      </button>
-
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div
-          className="lg:hidden fixed inset-0 bg-black/50 z-40"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Main Content */}
+    <div className="flex min-h-screen bg-gray-50">
       <main className="flex-1 overflow-y-auto">
         {/* Top Header */}
         <header className="bg-white border-b border-slate-200 px-4 sm:px-6 lg:px-8 py-4 lg:py-6">
@@ -603,13 +503,12 @@ export default function UserDashboard({
                 {(activeData.token.status === "waiting" ||
                   activeData.token.status === "near") && (
                   <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row gap-3 sm:gap-4">
-                    <button
-                      onClick={handleReschedule}
-                      disabled={isRescheduleOpen}
-                      className="flex-1 py-3 sm:py-4 px-4 sm:px-6 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    <Link
+                      href="/dashboard/user/myqueue"
+                      className="flex-1 py-3 sm:py-4 px-4 sm:px-6 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-lg text-center"
                     >
-                      {isRescheduleOpen ? "Rescheduling..." : "Reschedule"}
-                    </button>
+                      View My Queue Details
+                    </Link>
                     <button
                       onClick={handleLeaveQueue}
                       className="flex-1 py-3 sm:py-4 px-4 sm:px-6 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-lg"
