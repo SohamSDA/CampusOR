@@ -65,13 +65,13 @@ export default function LoginPage() {
                 Solution
               </a>
               <a
-                href="/landing#how"
+                href="#how"
                 className="transition-all duration-300 hover:text-slate-900 hover:scale-105"
               >
                 How It Works
               </a>
               <a
-                href="/landing#features"
+                href="#features"
                 className="transition-all duration-300 hover:text-slate-900 hover:scale-105"
               >
                 Features
