@@ -1,0 +1,107 @@
+import { User } from "../auth/user.model.js";
+import { Queue } from "../queue/queue.model.js";
+import { Types } from "mongoose";
+
+interface CheckInQueueInput {
+    userId: string;
+    queueId: string;
+}
+
+interface updateCheckInStatusInput {
+    userId: string;
+}
+
+interface GetUserStatusInput {
+  userId: string;
+}
+
+
+export const checkInQueue = async ({ userId, queueId }: CheckInQueueInput) => {
+    if (!Types.ObjectId.isValid(queueId)) {
+        throw { statusCode: 400, message: "Invalid queue ID" };
+    }
+
+    const queue = await Queue.findById(queueId);
+    if (!queue) {
+        throw { statusCode: 404, message: "Queue not found" };
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+        throw { statusCode: 404, message: "User not found" };
+    }
+
+    if (user.isInQueue) {
+        throw {
+            statusCode: 409,
+            message: "You are already in a queue",
+        };
+    }
+
+    user.isInQueue = true;
+    user.currentQueue = queue._id;
+    await user.save();
+
+    return {
+        message: "Successfully joined the queue",
+        currentQueue: queueId,
+    };
+};
+
+export const updateCheckInStatus = async ({
+    userId,
+}: updateCheckInStatusInput) => {
+    const user = await User.findById(userId);
+
+    if (!user) {
+        throw { statusCode: 404, message: "User not found" };
+    }
+
+    if (!user.isInQueue || !user.currentQueue) {
+        throw {
+            statusCode: 409,
+            message: "User is not currently in a queue",
+        };
+    }
+
+    const completedQueue = user.currentQueue;
+
+    // Prevent duplicate history entries
+    user.pastQueues = user.pastQueues || [];
+    if (!user.pastQueues.some(q => q.equals(completedQueue))) {
+        user.pastQueues.push(completedQueue);
+    }
+
+    // Clear active queue
+    user.currentQueue = undefined;
+    user.isInQueue = false;
+
+    await user.save();
+
+    // 📧 Queue finished email goes here
+    // sendQueueFinishedEmail(...) ← existing notification logic
+
+    // 🗂 History update logic hook goes here
+    // updateQueueHistory(...)
+
+    return {
+        message: "Queue completed successfully",
+        completedQueue,
+    };
+};
+
+export const getUserStatus = async ({ userId }: GetUserStatusInput) => {
+    const user = await User.findById(userId).select(
+      "isInQueue currentQueue"
+    );
+  
+    if (!user) {
+      throw { statusCode: 404, message: "User not found" };
+    }
+  
+    return {
+      isInQueue: user.isInQueue ?? false,
+      currentQueue: user.currentQueue ?? null,
+    };
+  };
+  
