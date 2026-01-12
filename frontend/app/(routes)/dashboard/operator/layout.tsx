@@ -1,4 +1,4 @@
-import OperatorSidebar from "@/component/OperatorSidebar";
+import OperatorSidebar from "@/components/sidebar/OperatorSidebar";
 
 export default function OperatorLayout({
     children,

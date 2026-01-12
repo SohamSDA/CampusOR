@@ -89,7 +89,7 @@ export default function SignupPage() {
       }
 
       login(loginData.token);
-      router.push("/landing");
+      router.push("/");
     } catch (err: any) {
       setError(err.message);
     } finally {
