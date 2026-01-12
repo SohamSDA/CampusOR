@@ -1,68 +1,72 @@
 "use client";
 
-import { QueueSnapshot } from "../../lib/websocket";
+import { subscribeToQueue } from "@/lib/websocket";
+import { useEffect, useMemo, useState } from "react";
 
-interface KioskProps {
-  queueData: QueueSnapshot;
-}
+type QueueSnapshot = {
+  queue: {
+    id: string;
+    name: string;
+    location: string;
+    status: "ACTIVE" | "PAUSED";
+  };
+  queueId: string;
+  tokens: Array<{
+    id: string;
+    seq: number;
+    status: string;
+  }>;
+};
 
-interface Counter {
-  counterId: number;
-  status: "busy" | "serving" | "idle";
-  currentToken: string | null;
-}
+type Props = {
+  queueId: string;
+};
 
-export default function Kiosk({ queueData }: KioskProps) {
-  // Get the currently serving token (the one with "SERVED" status or the latest active one)
-  const servingTokens = queueData.tokens.filter(
-    (t) => t.status === "SERVED" || t.status === "ACTIVE"
-  );
-  const nowServingToken = servingTokens[servingTokens.length - 1];
+export default function Kiosk({ queueId }: Props) {
+  const [snapshot, setSnapshot] = useState<QueueSnapshot | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  // Get the next tokens (waiting tokens)
-  const waitingTokens = queueData.tokens.filter((t) => t.status === "WAITING");
+  useEffect(() => {
+    const unsubscribe = subscribeToQueue(queueId, {
+      onUpdate: (payload) => {
+        setSnapshot(payload as QueueSnapshot);
+        setError(null);
+      },
+      onError: (err) => setError(err.message || "Socket error"),
+    });
+
+    return () => unsubscribe();
+  }, [queueId]);
+
+  const waitingTokens = useMemo(() => {
+    if (!snapshot) return [];
+    return snapshot.tokens
+      .filter((t) => t.status === "waiting")
+      .sort((a, b) => a.seq - b.seq);
+  }, [snapshot]);
+
+  const nowServing = useMemo(() => {
+    if (!snapshot) return null;
+    const served = snapshot.tokens
+      .filter((t) => t.status === "served")
+      .sort((a, b) => b.seq - a.seq);
+    return served[0] || null;
+  }, [snapshot]);
+
+  if (!snapshot) {
+    return (
+      <div className="h-screen w-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white mx-auto mb-4" />
+          <p className="text-slate-200">Connecting to queue...</p>
+          {error && <p className="text-red-300 mt-2">{error}</p>}
+        </div>
+      </div>
+    );
+  }
+
   const nextTokens = waitingTokens.slice(0, 8);
-
-  // Mock counter data (since backend doesn't provide counter-specific info yet)
-  // In a real implementation, this would come from the backend
-  const counters: Counter[] = [
-    {
-      counterId: 1,
-      status: nowServingToken ? "serving" : "idle",
-      currentToken: nowServingToken ? `T-${String(nowServingToken.seq).padStart(3, "0")}` : null,
-    },
-    { counterId: 2, status: "busy", currentToken: null },
-    { counterId: 3, status: "idle", currentToken: null },
-  ];
-
-  const cardColors = [
-    "bg-red-100 border-red-400",
-    "bg-green-100 border-green-400",
-    "bg-orange-100 border-orange-400",
-    "bg-pink-100 border-pink-400",
-  ];
-
-  const getStatusBadge = (status: Counter["status"]) => {
-    switch (status) {
-      case "serving":
-        return "bg-green-600 text-white";
-      case "busy":
-        return "bg-yellow-600 text-white";
-      default:
-        return "bg-gray-500 text-white";
-    }
-  };
-
-  const getStatusText = (status: Counter["status"]) => {
-    switch (status) {
-      case "serving":
-        return "Serving";
-      case "busy":
-        return "Busy";
-      default:
-        return "Available";
-    }
-  };
+  const formatToken = (seq: number) => `T-${String(seq).padStart(3, "0")}`;
 
   return (
     <div className="h-screen w-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white overflow-hidden">
@@ -71,9 +75,9 @@ export default function Kiosk({ queueData }: KioskProps) {
         <div className="h-[15vh] flex items-center justify-center border-b border-slate-700">
           <div className="text-center">
             <h1 className="text-3xl md:text-4xl font-extrabold">
-              Queue {queueData.queueId.slice(0, 8)}
+              {snapshot.queue.name}
             </h1>
-            <p className="text-slate-300 mt-2">Live Queue Display</p>
+            <p className="text-slate-300 mt-2">{snapshot.queue.location}</p>
           </div>
         </div>
 
@@ -82,81 +86,48 @@ export default function Kiosk({ queueData }: KioskProps) {
           {/* NOW SERVING */}
           <div className="flex flex-col items-center justify-center">
             <h2 className="text-xl text-slate-300 mb-4">NOW SERVING</h2>
-            {nowServingToken ? (
-              <>
-                <div className="text-7xl md:text-8xl font-black animate-pulse">
-                  T-{String(nowServingToken.seq).padStart(3, "0")}
-                </div>
-                <p className="mt-4 text-slate-400">Counter 1</p>
-              </>
-            ) : (
-              <div className="text-3xl text-slate-500">
-                Waiting for next token...
-              </div>
-            )}
+            <div className="text-7xl md:text-8xl font-black animate-pulse">
+              {nowServing ? formatToken(nowServing.seq) : "--"}
+            </div>
+            <p className="mt-4 text-slate-400">
+              {nowServing ? "Please proceed to the counter" : "Awaiting next token"}
+            </p>
           </div>
 
           {/* NEXT TOKENS */}
           <div className="flex flex-col items-center">
             <h2 className="text-xl text-slate-300 mb-4">NEXT TOKENS</h2>
-            {nextTokens.length > 0 ? (
-              <div className="grid grid-cols-2 gap-4">
-                {nextTokens.map((token, index) => (
+            <div className="grid grid-cols-2 gap-4">
+              {nextTokens.length === 0 ? (
+                <div className="col-span-2 text-slate-300">No one in line</div>
+              ) : (
+                nextTokens.map((token, index) => (
                   <div
                     key={token.id}
-                    className={`rounded-xl border-2 p-4 text-slate-800 ${
-                      cardColors[index % cardColors.length]
-                    }`}
+                    className="rounded-xl border-2 border-slate-600 bg-slate-800 p-4 text-slate-100"
                   >
-                    <div className="text-2xl font-bold">
-                      T-{String(token.seq).padStart(3, "0")}
-                    </div>
-                    <div className="text-xs mt-1 text-slate-600">
+                    <div className="text-2xl font-bold">{formatToken(token.seq)}</div>
+                    <div className="text-xs mt-1 text-slate-400">
                       #{index + 1} in queue
                     </div>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-slate-500">No tokens waiting</div>
-            )}
+                ))
+              )}
+            </div>
           </div>
         </div>
 
-        {/* QUEUE STATS */}
-        <div className="p-6 border-t border-slate-700">
-          <h2 className="text-xl text-slate-300 mb-6 text-center">
-            QUEUE STATISTICS
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="rounded-2xl border-2 border-blue-400 bg-blue-100 p-5 text-slate-800">
-              <div className="text-center">
-                <div className="text-4xl font-bold text-blue-600">
-                  {queueData.stats.totalWaiting}
-                </div>
-                <div className="text-sm mt-2 text-slate-700">Waiting</div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border-2 border-green-400 bg-green-100 p-5 text-slate-800">
-              <div className="text-center">
-                <div className="text-4xl font-bold text-green-600">
-                  {queueData.stats.totalActive}
-                </div>
-                <div className="text-sm mt-2 text-slate-700">Active</div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border-2 border-purple-400 bg-purple-100 p-5 text-slate-800">
-              <div className="text-center">
-                <div className="text-4xl font-bold text-purple-600">
-                  {queueData.stats.totalCompleted}
-                </div>
-                <div className="text-sm mt-2 text-slate-700">Completed</div>
-              </div>
-            </div>
-          </div>
+        {/* STATUS */}
+        <div className="p-6 border-t border-slate-700 text-center">
+          <span
+            className={`px-4 py-2 rounded-full text-sm font-semibold ${
+              snapshot.queue.status === "ACTIVE"
+                ? "bg-green-200 text-green-900"
+                : "bg-amber-200 text-amber-900"
+            }`}
+          >
+            {snapshot.queue.status === "ACTIVE" ? "Open" : "Paused"}
+          </span>
         </div>
       </div>
     </div>
