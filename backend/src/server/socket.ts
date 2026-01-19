@@ -2,6 +2,10 @@ import { Server as HttpServer } from "http";
 import { Server, Socket } from "socket.io";
 import { TokenService } from "../modules/queue/services/token.service.js";
 import { Queue, Token, TokenStatus } from "../modules/queue/queue.model.js";
+import {
+  getNowServing,
+  getWaitingTokens,
+} from "../modules/queue/services/redisQueue.service.js";
 
 interface QueueSnapshot {
   queue: {
@@ -216,7 +220,10 @@ export async function broadcastQueueUpdate(queueId: string): Promise<void> {
 
     io.to(roomName).emit("updateQueue", snapshot);
   } catch (error) {
-    console.error(`Error broadcasting queue update for queue ${queueId}:`, error);
+    console.error(
+      `Error broadcasting queue update for queue ${queueId}:`,
+      error,
+    );
     // Don't throw - broadcast failures shouldn't break the main flow
     // But log the error for monitoring/debugging
   }
@@ -247,19 +254,47 @@ async function getQueueSnapshot(queueId: string): Promise<QueueSnapshot> {
     throw new Error("Queue not found");
   }
 
-  // Only fetch active tokens (WAITING and SERVED) for efficiency
-  // This significantly reduces data transfer and improves performance
-  const activeTokens = await Token.find({
-    queue: queueId,
-    status: { $in: [TokenStatus.WAITING, TokenStatus.SERVED] },
-  })
-    .sort({ seq: 1 })
-    .lean();
+  const redisWaiting = await getWaitingTokens(queueId);
+  const redisNowServing = await getNowServing(queueId);
+
+  let activeTokens = [] as Array<{
+    _id: any;
+    seq: number;
+    status: TokenStatus;
+    createdAt: Date;
+  }>;
+
+  if (redisWaiting !== null) {
+    const tokenIds = new Set(redisWaiting.map((t) => t.id));
+    if (redisNowServing) tokenIds.add(redisNowServing);
+
+    const tokens = await Token.find({
+      _id: { $in: Array.from(tokenIds) },
+      status: { $in: [TokenStatus.WAITING, TokenStatus.SERVED] },
+    }).lean();
+
+    const tokenMap = new Map(tokens.map((t) => [t._id.toString(), t]));
+
+    activeTokens = Array.from(tokenMap.values()).sort(
+      (a, b) => a.seq - b.seq,
+    ) as typeof activeTokens;
+  } else {
+    // Only fetch active tokens (WAITING and SERVED) for efficiency
+    // This significantly reduces data transfer and improves performance
+    activeTokens = await Token.find({
+      queue: queueId,
+      status: { $in: [TokenStatus.WAITING, TokenStatus.SERVED] },
+    })
+      .sort({ seq: 1 })
+      .lean();
+  }
 
   // Calculate stats efficiently
   const stats = {
-    totalWaiting: activeTokens.filter((t) => t.status === TokenStatus.WAITING).length,
-    totalActive: activeTokens.filter((t) => t.status === TokenStatus.SERVED).length,
+    totalWaiting: activeTokens.filter((t) => t.status === TokenStatus.WAITING)
+      .length,
+    totalActive: activeTokens.filter((t) => t.status === TokenStatus.SERVED)
+      .length,
     // Count completed tokens separately (only count, don't fetch all)
     totalCompleted: await Token.countDocuments({
       queue: queueId,

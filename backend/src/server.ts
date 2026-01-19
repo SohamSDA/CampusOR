@@ -3,10 +3,14 @@ import app from "./app.js";
 import dbConnect from "./config/db.js";
 import { env } from "./config/env.js";
 import { initializeSocket } from "./server/socket.js";
+import { initializeRedis } from "./config/redis.js";
+import { rebuildRedisStateFromMongo } from "./modules/queue/services/redisQueue.service.js";
 
 const startServer = async () => {
   try {
     await dbConnect();
+    initializeRedis();
+    await rebuildRedisStateFromMongo();
     const httpServer = http.createServer(app);
     initializeSocket(httpServer);
 

@@ -1,5 +1,10 @@
 import { Queue, Token, TokenStatus } from "../queue.model.js";
 import { Types } from "mongoose";
+import {
+  enqueueToken,
+  removeToken,
+  setNowServing,
+} from "./redisQueue.service.js";
 
 export interface TokenResponse {
   success: boolean;
@@ -16,7 +21,10 @@ export interface TokenResponse {
 export class TokenService {
   // generate token for a user in a queue
   // Note: userId is required by Token schema, so this method requires it
-  static async generateToken(queueId: string, userId?: string): Promise<TokenResponse> {
+  static async generateToken(
+    queueId: string,
+    userId?: string,
+  ): Promise<TokenResponse> {
     try {
       if (!userId) {
         return {
@@ -28,7 +36,7 @@ export class TokenService {
       const queue = await Queue.findOneAndUpdate(
         { _id: queueId, isActive: true },
         { $inc: { nextSequence: 1 } },
-        { new: false }
+        { new: false },
       );
 
       if (!queue) {
@@ -48,6 +56,8 @@ export class TokenService {
         status: TokenStatus.WAITING,
       });
 
+      await enqueueToken(queue._id.toString(), token._id.toString(), seq);
+
       return {
         success: true,
         token: {
@@ -66,16 +76,16 @@ export class TokenService {
       };
     }
   }
-//--------------------------------update token status--
+  //--------------------------------update token status--
   static async updateStatus(
     tokenId: string,
-    status: TokenStatus
+    status: TokenStatus,
   ): Promise<TokenResponse> {
     try {
       const token = await Token.findByIdAndUpdate(
         tokenId,
         { status },
-        { new: true, runValidators: true}
+        { new: true, runValidators: true },
       );
 
       if (!token) {
@@ -83,6 +93,16 @@ export class TokenService {
           success: false,
           error: "Token not found",
         };
+      }
+
+      const queueId = token.queue.toString();
+      if (status === TokenStatus.WAITING) {
+        await enqueueToken(queueId, token._id.toString(), token.seq);
+      } else if (status === TokenStatus.SERVED) {
+        await removeToken(queueId, token._id.toString());
+        await setNowServing(queueId, token._id.toString());
+      } else {
+        await removeToken(queueId, token._id.toString());
       }
 
       return {

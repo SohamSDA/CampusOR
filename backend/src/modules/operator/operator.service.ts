@@ -1,5 +1,12 @@
 import { Queue, Token, TokenStatus } from "../queue/queue.model.js";
 import { User } from "../auth/user.model.js";
+import {
+  getNowServing,
+  popNextToken,
+  removeToken,
+  setNowServing,
+  enqueueToken,
+} from "../queue/services/redisQueue.service.js";
 
 export interface OperatorResponse {
   success: boolean;
@@ -24,10 +31,13 @@ export class OperatorService {
   static async serveNextToken(queueId: string): Promise<OperatorResponse> {
     try {
       // First, mark any currently served token as completed and clear user state
-      const currentlyServed = await Token.findOne({
-        queue: queueId,
-        status: TokenStatus.SERVED,
-      }).sort({ seq: -1 });
+      const nowServingId = await getNowServing(queueId);
+      const currentlyServed = nowServingId
+        ? await Token.findById(nowServingId)
+        : await Token.findOne({
+            queue: queueId,
+            status: TokenStatus.SERVED,
+          }).sort({ seq: -1 });
 
       if (currentlyServed) {
         currentlyServed.status = TokenStatus.COMPLETED;
@@ -39,13 +49,26 @@ export class OperatorService {
           user.currentQueue = undefined;
           await user.save();
         }
+
+        await removeToken(queueId, currentlyServed._id.toString());
+        await setNowServing(queueId, null);
       }
 
       // Find the next waiting token with lowest sequence number
-      const nextToken = await Token.findOne({
-        queue: queueId,
-        status: TokenStatus.WAITING,
-      }).sort({ seq: 1 });
+      const redisNext = await popNextToken(queueId);
+      let nextToken = redisNext
+        ? await Token.findById(redisNext.id)
+        : await Token.findOne({
+            queue: queueId,
+            status: TokenStatus.WAITING,
+          }).sort({ seq: 1 });
+
+      if (nextToken && nextToken.status !== TokenStatus.WAITING) {
+        nextToken = await Token.findOne({
+          queue: queueId,
+          status: TokenStatus.WAITING,
+        }).sort({ seq: 1 });
+      }
 
       if (!nextToken) {
         return {
@@ -57,6 +80,8 @@ export class OperatorService {
       // Update token status to served
       nextToken.status = TokenStatus.SERVED;
       await nextToken.save();
+
+      await setNowServing(queueId, nextToken._id.toString());
 
       return {
         success: true,
@@ -80,10 +105,13 @@ export class OperatorService {
   static async skipCurrentToken(queueId: string): Promise<OperatorResponse> {
     try {
       // Find the current token (last served token)
-      const currentToken = await Token.findOne({
-        queue: queueId,
-        status: TokenStatus.SERVED,
-      }).sort({ seq: -1 });
+      const nowServingId = await getNowServing(queueId);
+      const currentToken = nowServingId
+        ? await Token.findById(nowServingId)
+        : await Token.findOne({
+            queue: queueId,
+            status: TokenStatus.SERVED,
+          }).sort({ seq: -1 });
 
       if (!currentToken) {
         return {
@@ -95,6 +123,9 @@ export class OperatorService {
       // Update token status to skipped
       currentToken.status = TokenStatus.SKIPPED;
       await currentToken.save();
+
+      await removeToken(queueId, currentToken._id.toString());
+      await setNowServing(queueId, null);
 
       return {
         success: true,
@@ -134,6 +165,12 @@ export class OperatorService {
       skippedToken.status = TokenStatus.WAITING;
       await skippedToken.save();
 
+      await enqueueToken(
+        queueId,
+        skippedToken._id.toString(),
+        skippedToken.seq,
+      );
+
       return {
         success: true,
         token: {
@@ -158,7 +195,7 @@ export class OperatorService {
       const queue = await Queue.findByIdAndUpdate(
         queueId,
         { isActive: false },
-        { new: true, runValidators: true }
+        { new: true, runValidators: true },
       );
 
       if (!queue) {
@@ -191,7 +228,7 @@ export class OperatorService {
       const queue = await Queue.findByIdAndUpdate(
         queueId,
         { isActive: true },
-        { new: true, runValidators: true }
+        { new: true, runValidators: true },
       );
 
       if (!queue) {

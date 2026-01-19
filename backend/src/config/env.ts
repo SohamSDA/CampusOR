@@ -8,11 +8,20 @@ interface EnvConfig {
   NODE_ENV: string;
   JWT_SECRET: string;
   JWT_EXPIRES_IN: string;
-  FRONTEND_URL :string;
+  FRONTEND_URL: string;
+  REDIS_URL: string;
 }
 
 const getEnvConfig = (): EnvConfig => {
-  const { PORT, MONGO_URI, NODE_ENV, JWT_SECRET, JWT_EXPIRES_IN, FRONTEND_URL } = process.env;
+  const {
+    PORT,
+    MONGO_URI,
+    NODE_ENV,
+    JWT_SECRET,
+    JWT_EXPIRES_IN,
+    FRONTEND_URL,
+    REDIS_URL,
+  } = process.env;
 
   if (!MONGO_URI) {
     throw new Error("MONGO_URI is not defined in environment variables");
@@ -32,7 +41,8 @@ const getEnvConfig = (): EnvConfig => {
     NODE_ENV: NODE_ENV || "development",
     JWT_SECRET,
     JWT_EXPIRES_IN: JWT_EXPIRES_IN || "1h",
-    FRONTEND_URL: FRONTEND_URL || "http://localhost:3000"
+    FRONTEND_URL: FRONTEND_URL || "http://localhost:3000",
+    REDIS_URL: REDIS_URL || "redis://localhost:6379",
   };
 };
 

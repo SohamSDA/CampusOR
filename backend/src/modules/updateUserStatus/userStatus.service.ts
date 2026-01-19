@@ -5,6 +5,11 @@ import {
   sendQueueJoinedEmail,
   sendQueueFinishedEmail,
 } from "../notifications/email.service.js";
+import {
+  enqueueToken,
+  removeToken,
+  setNowServing,
+} from "../queue/services/redisQueue.service.js";
 
 interface CheckInQueueInput {
   userId: string;
@@ -51,7 +56,7 @@ const syncCurrentQueueCache = async (userId: string) => {
   if (!user) return;
 
   const activeToken = await getActiveToken(userId);
-  
+
   if (activeToken) {
     // User has active token, update cache
     if (!user.currentQueue || !user.currentQueue.equals(activeToken.queue)) {
@@ -99,6 +104,8 @@ export const checkInQueue = async ({ userId, queueId }: CheckInQueueInput) => {
     status: TokenStatus.WAITING,
   });
 
+  await enqueueToken(queue._id.toString(), token._id.toString(), token.seq);
+
   // Increment queue sequence
   queue.nextSequence += 1;
   await queue.save();
@@ -111,7 +118,7 @@ export const checkInQueue = async ({ userId, queueId }: CheckInQueueInput) => {
   sendQueueJoinedEmail(user.email, user.name, queue.name, queue.location).catch(
     (error) => {
       console.error("Failed to send queue joined email:", error);
-    }
+    },
   );
 
   return {
@@ -146,11 +153,15 @@ export const updateCheckInStatus = async ({
   if (activeToken.status === TokenStatus.SERVED) {
     activeToken.status = TokenStatus.COMPLETED;
     await activeToken.save();
+
+    await removeToken(activeToken.queue.toString(), activeToken._id.toString());
+    await setNowServing(activeToken.queue.toString(), null);
   } else if (activeToken.status === TokenStatus.WAITING) {
     // If still waiting, can't complete - token should be served first
     throw {
       statusCode: 409,
-      message: "Cannot complete queue while still waiting. Token must be served first.",
+      message:
+        "Cannot complete queue while still waiting. Token must be served first.",
     };
   }
 
@@ -167,7 +178,7 @@ export const updateCheckInStatus = async ({
       user.email,
       user.name,
       queue.name,
-      queue.location
+      queue.location,
     ).catch((error) => {
       console.error("Failed to send queue finished email:", error);
     });
@@ -189,7 +200,7 @@ export const getUserStatus = async ({ userId }: GetUserStatusInput) => {
   // Check Token table as source of truth
   const activeToken = await getActiveToken(userId);
   const isInQueue = !!activeToken;
-  
+
   // Sync cache if needed
   if (isInQueue && activeToken) {
     if (!user.currentQueue || !user.currentQueue.equals(activeToken.queue)) {
@@ -218,13 +229,17 @@ export const getUserHistory = async ({ userId }: GetUserHistoryInput) => {
   // Get all tokens for this user (excluding active tokens to show only history)
   const allTokens = await Token.find({
     userId: new Types.ObjectId(userId),
-    status: { $in: [TokenStatus.COMPLETED, TokenStatus.CANCELLED, TokenStatus.SKIPPED] },
+    status: {
+      $in: [TokenStatus.COMPLETED, TokenStatus.CANCELLED, TokenStatus.SKIPPED],
+    },
   })
     .sort({ createdAt: -1 }) // Most recent first
     .lean();
 
   // Get unique queue IDs to fetch queue details
-  const queueIds = [...new Set(allTokens.map((token) => token.queue.toString()))];
+  const queueIds = [
+    ...new Set(allTokens.map((token) => token.queue.toString())),
+  ];
 
   // Fetch all queues (no joins - separate queries)
   const queues = await Queue.find({
@@ -250,7 +265,10 @@ export const getUserHistory = async ({ userId }: GetUserHistoryInput) => {
     let servedAt: Date | null = null;
     let cancelledAt: Date | null = null;
 
-    if (token.status === TokenStatus.COMPLETED || token.status === TokenStatus.SERVED) {
+    if (
+      token.status === TokenStatus.COMPLETED ||
+      token.status === TokenStatus.SERVED
+    ) {
       // updatedAt reflects when status changed to this state
       servedAt = updatedAt;
     } else if (
@@ -297,7 +315,8 @@ export const updateUserHistory = async ({
   // For now, just return success without persisting
   return {
     updated: false,
-    message: "History tracking has been removed. Use Token table for history if needed.",
+    message:
+      "History tracking has been removed. Use Token table for history if needed.",
   };
 };
 // Join queue and generate token
@@ -340,6 +359,8 @@ export const joinQueueWithToken = async ({
     status: TokenStatus.WAITING,
   });
 
+  await enqueueToken(queue._id.toString(), token._id.toString(), token.seq);
+
   // Increment queue sequence
   queue.nextSequence += 1;
   await queue.save();
@@ -352,7 +373,7 @@ export const joinQueueWithToken = async ({
   sendQueueJoinedEmail(user.email, user.name, queue.name, queue.location).catch(
     (error) => {
       console.error("Failed to send queue joined email:", error);
-    }
+    },
   );
 
   // Count waiting tokens for position
@@ -389,7 +410,7 @@ export const getCurrentQueueDetails = async ({
 
   // Check Token table as source of truth
   const activeToken = await getActiveToken(userId);
-  
+
   if (!activeToken) {
     // No active token, clear cache and return null
     if (user.currentQueue) {
@@ -444,7 +465,7 @@ export const leaveCurrentQueue = async ({ userId }: GetUserStatusInput) => {
 
   // Check Token table as source of truth
   const activeToken = await getActiveToken(userId);
-  
+
   if (!activeToken) {
     throw { statusCode: 409, message: "You are not in a queue" };
   }
@@ -456,11 +477,14 @@ export const leaveCurrentQueue = async ({ userId }: GetUserStatusInput) => {
   if (activeToken.status === TokenStatus.WAITING) {
     activeToken.status = TokenStatus.CANCELLED;
     await activeToken.save();
+
+    await removeToken(queueId, activeToken._id.toString());
   } else {
     // If token is SERVED, can't leave - need to complete it first
-    throw { 
-      statusCode: 409, 
-      message: "Cannot leave queue while being served. Please complete your service first." 
+    throw {
+      statusCode: 409,
+      message:
+        "Cannot leave queue while being served. Please complete your service first.",
     };
   }
 
