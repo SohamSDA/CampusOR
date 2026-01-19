@@ -19,6 +19,8 @@ export interface IUser extends Document {
   // Queue-related fields
   currentQueue?: Types.ObjectId; // Reference to queue if user is in queue
 
+  createdByAdmin?: Types.ObjectId;
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -79,6 +81,12 @@ const userSchema = new Schema<IUser>(
       ref: "Queue",
       required: false,
     },
+
+    createdByAdmin: {
+      type: Schema.Types.ObjectId,
+      required: false,
+      default: null
+    }
   },
   {
     timestamps: true,

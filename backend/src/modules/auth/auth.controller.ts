@@ -156,6 +156,13 @@ export const resendOtp = async (req: Request, res: Response) => {
 export const createAdmin = async (req: AuthRequest, res: Response) => {
   try {
     const { name, email, password, collegeEmail } = req.body;
+    const createdByAdminId = req.user?.sub;
+
+    if (!createdByAdminId) {
+      return res.status(400).json({
+        message: "Only admins can create another admin",
+      });
+    }
 
     // Basic validation
     if (!name || !email || !password) {
@@ -165,7 +172,7 @@ export const createAdmin = async (req: AuthRequest, res: Response) => {
     }
 
     // Create admin user (only accessible by existing admin users via middleware)
-    const user = await createAdminUser({ name, email, password, collegeEmail });
+    const user = await createAdminUser({ name, email, password, collegeEmail, createdByAdminId });
 
     return res.status(201).json({
       message: "Admin user created successfully",
