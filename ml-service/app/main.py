@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
-from schemas import PredictRequest, PredictResponse, HealthResponse
-from model import wait_time_model, MODEL_VERSION
+from .schemas import PredictRequest, PredictResponse, HealthResponse
+from .model import wait_time_model, MODEL_VERSION
 
 app = FastAPI()
 

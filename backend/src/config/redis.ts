@@ -11,7 +11,12 @@ export const initializeRedis = (): void => {
   redisClient = new Redis(env.REDIS_URL, {
     enableReadyCheck: true,
     maxRetriesPerRequest: 1,
-    lazyConnect: false,
+    lazyConnect: true, // Don't crash on startup if missing
+    retryStrategy: (times) => {
+      // Exponential backoff: 2s, 4s, 8s, ... max 60s
+      const delay = Math.min(times * 2000, 60000);
+      return delay;
+    },
   });
 
   redisClient.on("ready", () => {

@@ -31,7 +31,19 @@ class ApiService {
     return headers;
   }
 
-  async post(endpoint: string, data: any, includeAuth: boolean = false) {
+  private unauthorizedCallback: (() => void) | null = null;
+
+  public setUnauthorizedCallback(callback: () => void) {
+    this.unauthorizedCallback = callback;
+  }
+
+  private handleUnauthorized() {
+    if (this.unauthorizedCallback) {
+      this.unauthorizedCallback();
+    }
+  }
+
+  async post(endpoint: string, data: unknown, includeAuth: boolean = false) {
     const response = await fetch(this.buildUrl(endpoint), {
       method: "POST",
       headers: includeAuth
@@ -39,6 +51,10 @@ class ApiService {
         : { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
+
+    if (response.status === 401 || response.status === 403) {
+      this.handleUnauthorized();
+    }
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -58,6 +74,10 @@ class ApiService {
         : { "Content-Type": "application/json" },
     });
 
+    if (response.status === 401 || response.status === 403) {
+      this.handleUnauthorized();
+    }
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(
@@ -68,7 +88,7 @@ class ApiService {
     return response.json();
   }
 
-  async put(endpoint: string, data: any, includeAuth: boolean = true) {
+  async put(endpoint: string, data: unknown, includeAuth: boolean = true) {
     const response = await fetch(this.buildUrl(endpoint), {
       method: "PUT",
       headers: includeAuth
@@ -77,6 +97,10 @@ class ApiService {
       body: JSON.stringify(data),
     });
 
+    if (response.status === 401 || response.status === 403) {
+      this.handleUnauthorized();
+    }
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(
@@ -87,7 +111,7 @@ class ApiService {
     return response.json();
   }
 
-  async patch(endpoint: string, data: any, includeAuth: boolean = true) {
+  async patch(endpoint: string, data: unknown, includeAuth: boolean = true) {
     const response = await fetch(this.buildUrl(endpoint), {
       method: "PATCH",
       headers: includeAuth
@@ -95,6 +119,10 @@ class ApiService {
         : { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
+
+    if (response.status === 401 || response.status === 403) {
+      this.handleUnauthorized();
+    }
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -121,6 +149,10 @@ class ApiService {
         ? this.getAuthHeaders()
         : { "Content-Type": "application/json" },
     });
+
+    if (response.status === 401 || response.status === 403) {
+      this.handleUnauthorized();
+    }
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
