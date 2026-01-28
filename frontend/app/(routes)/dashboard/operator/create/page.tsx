@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 export default function CreateQueuePage() {
   const router = useRouter();
-  const [formData, setFormData] = useState({ name: "", location: "" });
+  const [formData, setFormData] = useState({ name: "", location: "", capacity: 50 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -71,6 +71,27 @@ export default function CreateQueuePage() {
                 setFormData({ ...formData, location: e.target.value })
               }
             />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              Capacity
+            </label>
+            <input
+              type="number"
+              min={1}
+              className="mt-1 block w-full rounded-lg border border-slate-300 p-3 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-colors"
+              placeholder="Maximum tokens allowed"
+              value={formData.capacity}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  capacity: Number(e.target.value),
+                })
+              }
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              Queue will stop accepting joins when waiting tokens reach this number.
+            </p>
           </div>
           <button
             type="submit"

@@ -39,7 +39,7 @@ export async function getPredictedWaitTime(req: AuthRequest, res: Response) {
 }
 export async function createQueue(req: AuthRequest, res: Response) {
   try {
-    const { name, location, operator } = req.body;
+    const { name, location, operator, capacity } = req.body;
 
     // Use the explicit operator from body, or default to the creating user
     // (This allows admins to assign operators, or operators to assign themselves)
@@ -49,6 +49,13 @@ export async function createQueue(req: AuthRequest, res: Response) {
       return res.status(400).json({
         success: false,
         error: "Queue name and location are required",
+      });
+    }
+
+    if (capacity !== undefined && (isNaN(Number(capacity)) || Number(capacity) <= 0)) {
+      return res.status(400).json({
+        success: false,
+        error: "Capacity must be a positive number",
       });
     }
 
@@ -67,6 +74,8 @@ export async function createQueue(req: AuthRequest, res: Response) {
       operator: operatorId || null,
       isActive: true,
       nextSequence: 1,
+      capacity: capacity ? Number(capacity) : undefined,
+      isFull: false,
     });
 
     return res.status(201).json({
@@ -107,7 +116,7 @@ export async function generateToken(req: AuthRequest, res: Response) {
     let status = 400;
     if (result.retryAfterSeconds) {
       status = 429;
-    } else if (result.error && result.error.includes("already")) {
+    } else if (result.error && (result.error.includes("already") || result.error.includes("full"))) {
       status = 409;
     }
     return res.status(status).json(result);
@@ -163,6 +172,8 @@ export async function getQueueOperatorView(req: AuthRequest, res: Response) {
     })
       .sort({ seq: 1 })
       .select("id seq status");
+    const capacity = queue.capacity || 50;
+    const isFull = queue.isFull || waitingTokens.length >= capacity;
 
     // Fetch the token currently being served (most recently updated to SERVED)
     const nowServingToken = await Token.findOne({
@@ -178,6 +189,8 @@ export async function getQueueOperatorView(req: AuthRequest, res: Response) {
         name: queue.name,
         location: queue.location,
         status: queue.isActive ? "ACTIVE" : "PAUSED",
+        capacity,
+        isFull,
       },
       tokens: waitingTokens.map((t) => ({
         id: t._id,
@@ -201,12 +214,13 @@ export async function getQueueOperatorView(req: AuthRequest, res: Response) {
 export async function getQueuesForUsers(req: AuthRequest, res: Response) {
   try {
     const queues = await Queue.find({}).select(
-      "name location isActive createdAt",
+      "name location isActive createdAt capacity isFull",
     );
 
     // Get queue stats for each queue
     const queuesWithStats = await Promise.all(
       queues.map(async (queue) => {
+        const capacity = queue.capacity || 50;
         // Count waiting tokens for this queue
         const waitingCount = await Token.countDocuments({
           queue: queue._id,
@@ -216,15 +230,12 @@ export async function getQueuesForUsers(req: AuthRequest, res: Response) {
         // Calculate estimated wait time (5 minutes per waiting person)
         const estimatedWaitTime = waitingCount * 5;
 
-        // Determine status based on isActive flag
-        let status: "open" | "paused" | "closed";
-        if (!queue.isActive) {
-          status = "paused";
-        } else if (waitingCount >= 20) {
-          status = "closed";
-        } else {
-          status = "open";
-        }
+        const isFull = queue.isFull || waitingCount >= capacity;
+        const status: "open" | "paused" | "full" = !queue.isActive
+          ? "paused"
+          : isFull
+            ? "full"
+            : "open";
 
         return {
           // queueId: `Q-${queue._id.toString().slice(-4)}`,
@@ -235,6 +246,9 @@ export async function getQueuesForUsers(req: AuthRequest, res: Response) {
           queueLength: waitingCount,
           waitTime: estimatedWaitTime,
           status,
+          capacity,
+          isFull,
+          availableSlots: Math.max(capacity - waitingCount, 0),
         };
       }),
     );

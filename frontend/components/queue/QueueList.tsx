@@ -14,7 +14,7 @@ type LocationFilter =
   | "Clinic"
   | "Hostel"
   | "Sports Complex";
-type StatusFilter = "all" | "open" | "paused" | "closed";
+type StatusFilter = "all" | "open" | "paused" | "full";
 
 export default function QueueList() {
   const [sortBy, setSortBy] = useState<SortOption>("waitTime");
@@ -146,7 +146,7 @@ export default function QueueList() {
                   <option value="all">All Status</option>
                   <option value="open">Open</option>
                   <option value="paused">Paused</option>
-                  <option value="closed">Full</option>
+                  <option value="full">Full</option>
                 </select>
               </div>
             </div>

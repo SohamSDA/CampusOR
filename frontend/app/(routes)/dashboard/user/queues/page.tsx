@@ -12,6 +12,7 @@ import {
   Loader2,
   AlertCircle,
 } from "lucide-react";
+import { toast } from "sonner";
 
 interface Queue {
   queueId: string;
@@ -19,7 +20,10 @@ interface Queue {
   location: string;
   queueLength: number;
   waitTime: number;
-  status: "open" | "paused" | "closed";
+  status: "open" | "paused" | "full";
+  capacity?: number;
+  isFull?: boolean;
+  availableSlots?: number;
 }
 
 export default function BrowseQueuesPage() {
@@ -79,12 +83,12 @@ export default function BrowseQueuesPage() {
       );
 
       if (response.success) {
-        alert(`Successfully joined! Your token: ${response.data.tokenNumber}`);
+        toast.success(`Successfully joined! Your token: ${response.data.tokenNumber}`);
         router.push("/dashboard/user/myqueue");
       }
     } catch (err: any) {
       console.error("Failed to join queue:", err);
-      alert(
+      toast.error(
         err.message || "Failed to join queue. You may already be in a queue."
       );
     } finally {
@@ -106,7 +110,7 @@ export default function BrowseQueuesPage() {
             Paused
           </span>
         );
-      case "closed":
+      case "full":
         return (
           <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
             Full
@@ -214,7 +218,7 @@ export default function BrowseQueuesPage() {
                   <div>
                     <p className="text-xs text-gray-500">Queue Length</p>
                     <p className="text-sm font-semibold text-gray-900">
-                      {queue.queueLength} people
+                      {queue.queueLength} / {queue.capacity ?? "—"} waiting
                     </p>
                   </div>
                 </div>
@@ -233,8 +237,9 @@ export default function BrowseQueuesPage() {
               <button
                 onClick={() => handleJoinQueue(queue.queueId, queue.queueName)}
                 disabled={
-                  queue.status === "closed" ||
+                  queue.status === "full" ||
                   queue.status === "paused" ||
+                  queue.isFull ||
                   joiningQueue === queue.queueId
                 }
                 className={`w-full py-2.5 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
@@ -250,10 +255,15 @@ export default function BrowseQueuesPage() {
                   </>
                 ) : (
                   <>
-                    {queue.status === "open" ? "Join Queue" : "Not Available"}
+                    {queue.status === "open" ? "Join Queue" : "Queue Full"}
                   </>
                 )}
               </button>
+              {(queue.status === "full" || queue.isFull) && (
+                <p className="mt-2 text-xs text-red-600">
+                  This queue is currently at capacity. Please try again later.
+                </p>
+              )}
             </div>
           ))}
         </div>

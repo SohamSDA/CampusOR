@@ -8,6 +8,7 @@ import {
   setNowServing,
   enqueueToken,
 } from "../queue/services/redisQueue.service.js";
+import { syncQueueFullFlag } from "../queue/services/capacity.service.js";
 
 export interface OperatorResponse {
   success: boolean;
@@ -23,6 +24,8 @@ export interface OperatorResponse {
     name: string;
     isActive: boolean;
     nextSequence: number;
+    capacity?: number;
+    isFull?: boolean;
   };
   error?: string;
 }
@@ -84,6 +87,8 @@ export class OperatorService {
 
       await setNowServing(queueId, nextToken._id.toString());
 
+      await syncQueueFullFlag(queueId);
+
       return {
         success: true,
         token: {
@@ -128,6 +133,8 @@ export class OperatorService {
       await removeToken(queueId, currentToken._id.toString());
       await setNowServing(queueId, null);
 
+      await syncQueueFullFlag(queueId);
+
       return {
         success: true,
         token: {
@@ -171,6 +178,8 @@ export class OperatorService {
         skippedToken._id.toString(),
         skippedToken.seq,
       );
+
+      await syncQueueFullFlag(queueId);
 
       return {
         success: true,
@@ -246,6 +255,8 @@ export class OperatorService {
           name: queue.name,
           isActive: queue.isActive,
           nextSequence: queue.nextSequence,
+          capacity: queue.capacity,
+          isFull: queue.isFull,
         },
       };
     } catch {
@@ -253,6 +264,42 @@ export class OperatorService {
         success: false,
         error: "Failed to resume queue",
       };
+    }
+  }
+
+  static async updateCapacity(
+    queueId: string,
+    capacity: number,
+  ): Promise<OperatorResponse> {
+    try {
+      const queue = await Queue.findById(queueId);
+      if (!queue) {
+        return { success: false, error: "Queue not found" };
+      }
+
+      queue.capacity = capacity;
+
+      const waitingCount = await Token.countDocuments({
+        queue: queueId,
+        status: TokenStatus.WAITING,
+      });
+
+      queue.isFull = waitingCount >= capacity;
+      await queue.save();
+
+      return {
+        success: true,
+        queue: {
+          id: queue._id.toString(),
+          name: queue.name,
+          isActive: queue.isActive,
+          nextSequence: queue.nextSequence,
+          capacity: queue.capacity,
+          isFull: queue.isFull,
+        },
+      };
+    } catch {
+      return { success: false, error: "Failed to update capacity" };
     }
   }
 }

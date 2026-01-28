@@ -6,6 +6,8 @@ type UpdateQueuePayload = {
     name: string;
     location: string;
     status: "ACTIVE" | "PAUSED";
+    capacity: number;
+    isFull: boolean;
     nextSequence: number;
   };
   queueId: string;

@@ -12,6 +12,10 @@ import {
   setNowServing,
 } from "../queue/services/redisQueue.service.js";
 import { TokenService } from "../queue/services/token.service.js";
+import {
+  ensureCapacityAvailable,
+  syncQueueFullFlag,
+} from "../queue/services/capacity.service.js";
 
 interface CheckInQueueInput {
   userId: string;
@@ -79,9 +83,22 @@ export const checkInQueue = async ({ userId, queueId }: CheckInQueueInput) => {
     throw { statusCode: 400, message: "Invalid queue ID" };
   }
 
-  const queue = await Queue.findById(queueId);
+  const capacityState = await ensureCapacityAvailable(queueId);
+  const queue = capacityState.queue;
+
   if (!queue) {
     throw { statusCode: 404, message: "Queue not found" };
+  }
+
+  if (!queue.isActive) {
+    throw { statusCode: 400, message: "Queue is not active" };
+  }
+
+  if (capacityState.isFull) {
+    throw {
+      statusCode: 409,
+      message: "This queue is currently full. Please try again later.",
+    };
   }
 
   const user = await User.findById(userId);
@@ -109,6 +126,8 @@ export const checkInQueue = async ({ userId, queueId }: CheckInQueueInput) => {
   await enqueueToken(queue._id.toString(), token._id.toString(), token.seq);
 
   // Increment queue sequence
+  const waitingAfterJoin = capacityState.waitingCount + 1;
+  queue.isFull = waitingAfterJoin >= queue.capacity;
   queue.nextSequence += 1;
   await queue.save();
 
@@ -173,6 +192,8 @@ export const updateCheckInStatus = async ({
   // Clear cache
   user.currentQueue = undefined;
   await user.save();
+
+  await syncQueueFullFlag(completedQueue.toString());
 
   // Send queue finished email (non-blocking)
   if (queue) {
@@ -487,6 +508,8 @@ export const leaveCurrentQueue = async ({ userId }: GetUserStatusInput) => {
   // Clear cache
   user.currentQueue = undefined;
   await user.save();
+
+  await syncQueueFullFlag(queueId);
 
   return {
     message: "Successfully left the queue",

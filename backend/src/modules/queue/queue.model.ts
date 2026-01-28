@@ -6,6 +6,8 @@ export interface IQueue extends Document {
   location: string;
   isActive: boolean;
   nextSequence: number;
+  capacity: number;
+  isFull: boolean;
   operator?: mongoose.Types.ObjectId; // ✅ NEW
   createdAt: Date;
   updatedAt: Date;
@@ -39,6 +41,18 @@ const queueSchema = new Schema<IQueue>(
       type: Number,
       required: true,
       default: 1,
+    },
+
+    capacity: {
+      type: Number,
+      required: true,
+      min: 1,
+      default: 50,
+    },
+
+    isFull: {
+      type: Boolean,
+      default: false,
     },
   },
   { timestamps: true }

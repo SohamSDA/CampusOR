@@ -1,4 +1,4 @@
-export type QueueStatus = 'open' | 'closed' | 'paused' | 'serving';
+export type QueueStatus = 'open' | 'full' | 'paused' | 'serving';
 
 export interface Queue {
   queueId: string;
@@ -9,6 +9,8 @@ export interface Queue {
   /** Wait time in minutes */
   waitTime: number;
   status: QueueStatus;
+  capacity?: number;
+  isFull?: boolean;
 }
 
 export type Queues = Queue[];
