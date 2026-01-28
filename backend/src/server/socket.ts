@@ -14,6 +14,8 @@ interface QueueSnapshot {
     name: string;
     location: string;
     status: "ACTIVE" | "PAUSED";
+    capacity: number;
+    isFull: boolean;
     nextSequence: number;
   };
   queueId: string;
@@ -254,6 +256,7 @@ async function getQueueSnapshot(queueId: string): Promise<QueueSnapshot> {
   if (!queue) {
     throw new Error("Queue not found");
   }
+  const capacity = queue.capacity || 50;
 
   const redisWaiting = await getWaitingTokens(queueId);
   const redisNowServing = await getNowServing(queueId);
@@ -309,6 +312,8 @@ async function getQueueSnapshot(queueId: string): Promise<QueueSnapshot> {
       name: queue.name,
       location: queue.location,
       status: queue.isActive ? "ACTIVE" : "PAUSED",
+      capacity,
+      isFull: queue.isFull || stats.totalWaiting >= capacity,
       nextSequence: queue.nextSequence,
     },
     queueId,

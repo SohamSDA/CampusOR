@@ -32,6 +32,8 @@ interface CurrentQueue {
 interface QueueSnapshot {
   queue: {
     status: "ACTIVE" | "PAUSED";
+    isFull?: boolean;
+    capacity?: number;
   };
   tokens: Array<{
     id: string;

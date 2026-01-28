@@ -7,6 +7,10 @@ import {
   setNowServing,
 } from "./redisQueue.service.js";
 import { checkRateLimits, recordJoin } from "./rateLimit.service.js";
+import {
+  ensureCapacityAvailable,
+  syncQueueFullFlag,
+} from "./capacity.service.js";
 
 export interface TokenResponse {
   success: boolean;
@@ -59,33 +63,56 @@ export class TokenService {
         };
       }
 
-      const queue = await Queue.findOneAndUpdate(
-        { _id: queueId, isActive: true },
-        { $inc: { nextSequence: 1 } },
-        { new: false },
-      );
+      const capacityState = await ensureCapacityAvailable(queueId);
+      const queue = capacityState.queue;
 
-      if (!queue) {
+      if (!queue || !queue.isActive) {
         return {
           success: false,
           error: "Queue not found or inactive",
         };
       }
 
-      const seq = queue.nextSequence;
+      if (capacityState.isFull) {
+        return {
+          success: false,
+          error: "This queue is currently full. Please try again later.",
+        };
+      }
+
+      const queueSnapshot = await Queue.findOneAndUpdate(
+        { _id: queueId, isActive: true },
+        { $inc: { nextSequence: 1 } },
+        { new: false },
+      );
+
+      if (!queueSnapshot) {
+        return {
+          success: false,
+          error: "Queue not found or inactive",
+        };
+      }
+
+      const seq = queueSnapshot.nextSequence;
 
       // Create token with userId (required by schema)
       const token = await Token.create({
-        queue: queue._id,
+        queue: queueSnapshot._id,
         userId: new Types.ObjectId(userId),
         seq,
         status: TokenStatus.WAITING,
       });
 
-      await enqueueToken(queue._id.toString(), token._id.toString(), seq);
+      await enqueueToken(queueSnapshot._id.toString(), token._id.toString(), seq);
 
       // Record successful join for rate limiting
       await recordJoin(userId, queueId);
+
+      const waitingAfterJoin = capacityState.waitingCount + 1;
+      const shouldBeFull = waitingAfterJoin >= queue.capacity;
+      if (queue.isFull !== shouldBeFull) {
+        await Queue.findByIdAndUpdate(queueId, { isFull: shouldBeFull });
+      }
 
       return {
         success: true,
@@ -142,6 +169,8 @@ export class TokenService {
       } else {
         await removeToken(queueId, token._id.toString());
       }
+
+      await syncQueueFullFlag(queueId);
 
       return {
         success: true,

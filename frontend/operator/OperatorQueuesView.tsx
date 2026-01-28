@@ -13,6 +13,9 @@ export type OperatorQueue = {
   name: string;
   status: "ACTIVE" | "PAUSED";
   location: string;
+  capacity?: number;
+  isFull?: boolean;
+  waitingCount?: number;
 };
 
 const parseQueues = (payload: unknown): OperatorQueue[] => {
@@ -34,6 +37,8 @@ export default function OperatorQueuesView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionQueueId, setActionQueueId] = useState<string | null>(null);
+  const [capacityEdits, setCapacityEdits] = useState<Record<string, string>>({});
+  const [savingCapacity, setSavingCapacity] = useState<string | null>(null);
 
   const loadQueues = useCallback(async () => {
     try {
@@ -41,6 +46,13 @@ export default function OperatorQueuesView() {
       const data = await apiService.get("/operator/queues", true);
       setQueues(parseQueues(data));
       setError(null);
+      const parsed = parseQueues(data);
+      setCapacityEdits(
+        parsed.reduce(
+          (acc, queue) => ({ ...acc, [queue.id]: String(queue.capacity ?? "") }),
+          {},
+        ),
+      );
     } catch (err) {
       console.error("Failed to load queues", err);
       setError("Unable to load your queues right now.");
@@ -88,6 +100,44 @@ export default function OperatorQueuesView() {
       toast.error(message);
     } finally {
       setActionQueueId(null);
+    }
+  };
+
+  const saveCapacity = async (queue: OperatorQueue) => {
+    const raw = capacityEdits[queue.id] ?? String(queue.capacity ?? "");
+    const nextCapacity = Number(raw);
+
+    if (Number.isNaN(nextCapacity) || nextCapacity <= 0) {
+      toast.error("Capacity must be a positive number.");
+      return;
+    }
+
+    try {
+      setSavingCapacity(queue.id);
+      await apiService.patch(
+        `/operator/queues/${queue.id}/capacity`,
+        { capacity: nextCapacity },
+        true,
+      );
+      toast.success("Capacity updated.");
+      setQueues((prev) =>
+        prev.map((item) =>
+          item.id === queue.id
+            ? {
+              ...item,
+              capacity: nextCapacity,
+              isFull:
+                (item.waitingCount ?? 0) >= nextCapacity ? true : false,
+            }
+            : item,
+        ),
+      );
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Failed to update capacity";
+      toast.error(message);
+    } finally {
+      setSavingCapacity(null);
     }
   };
 
@@ -164,13 +214,41 @@ export default function OperatorQueuesView() {
                   <span
                     className={`px-3 py-1 rounded-full text-xs font-semibold ${queue.status === "ACTIVE"
                       ? "bg-green-100 text-green-700"
-                      : "bg-amber-100 text-amber-700"
+                      : queue.isFull
+                        ? "bg-red-100 text-red-700"
+                        : "bg-amber-100 text-amber-700"
                       }`}
                   >
-                    {queue.status === "ACTIVE" ? "Active" : "Paused"}
+                    {queue.isFull
+                      ? "Full"
+                      : queue.status === "ACTIVE"
+                        ? "Active"
+                        : "Paused"}
                   </span>
                 </div>
-                <div className="mt-6 flex flex-wrap gap-3">
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                  <div className="bg-slate-50 rounded-lg p-3">
+                    <p className="text-slate-500">Waiting</p>
+                    <p className="text-slate-900 font-semibold">
+                      {queue.waitingCount ?? "—"}
+                    </p>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg p-3">
+                    <p className="text-slate-500">Capacity</p>
+                    <p className="text-slate-900 font-semibold">
+                      {queue.capacity ?? "—"}
+                    </p>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg p-3">
+                    <p className="text-slate-500">Available</p>
+                    <p className="text-slate-900 font-semibold">
+                      {queue.capacity !== undefined && queue.waitingCount !== undefined
+                        ? Math.max(queue.capacity - queue.waitingCount, 0)
+                        : "—"}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-3">
                   <button
                     onClick={() => goToQueue(queue.id)}
                     className="inline-flex items-center justify-center px-4 py-2 rounded-lg border border-sky-600 text-sky-700 font-semibold hover:bg-sky-50 transition-colors"
@@ -184,6 +262,27 @@ export default function OperatorQueuesView() {
                   >
                     {queue.status === "ACTIVE" ? "Pause" : "Resume"}
                   </button>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      value={capacityEdits[queue.id] ?? queue.capacity ?? ""}
+                      onChange={(e) =>
+                        setCapacityEdits((prev) => ({
+                          ...prev,
+                          [queue.id]: e.target.value,
+                        }))
+                      }
+                      className="w-24 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
+                    />
+                    <button
+                      onClick={() => saveCapacity(queue)}
+                      disabled={savingCapacity === queue.id}
+                      className="inline-flex items-center justify-center px-3 py-2 rounded-lg border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50"
+                    >
+                      {savingCapacity === queue.id ? "Saving..." : "Save"}
+                    </button>
+                  </div>
                   <Link
                     href={`/kiosk/${queue.id}`}
                     className="inline-flex items-center justify-center px-4 py-2 rounded-lg border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 transition-colors"

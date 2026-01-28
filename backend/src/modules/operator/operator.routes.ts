@@ -6,6 +6,7 @@ import {
   recallCurrentToken,
   pauseQueue,
   resumeQueue,
+  updateQueueCapacity,
 } from "./operator.controller.js";
 import { verifyJWT, authorize } from "../../middlewares/auth.js";
 
@@ -38,5 +39,13 @@ router.patch("/queues/:queueId/pause", verifyJWT, authorize("operator", "admin")
 
 // Resume queue
 router.patch("/queues/:queueId/resume", verifyJWT, authorize("operator", "admin"), resumeQueue);
+
+// Update capacity
+router.patch(
+  "/queues/:queueId/capacity",
+  verifyJWT,
+  authorize("operator", "admin"),
+  updateQueueCapacity,
+);
 
 export default router;

@@ -18,6 +18,8 @@ type QueueData = {
   name: string;
   status: "ACTIVE" | "PAUSED";
   location: string;
+  capacity?: number;
+  isFull?: boolean;
 };
 
 type OperatorQueue = {
@@ -25,6 +27,8 @@ type OperatorQueue = {
   name: string;
   status: "ACTIVE" | "PAUSED";
   location: string;
+  capacity?: number;
+  isFull?: boolean;
 };
 
 type OperatorViewToken = {
@@ -193,12 +197,19 @@ export default function OperatorLiveQueuesPage() {
         name: payload.queue.name,
         location: payload.queue.location,
         status: payload.queue.status,
+        capacity: payload.queue.capacity,
+        isFull: payload.queue.isFull,
       });
 
       setQueues((prev) =>
         prev.map((item) =>
           item.id === payload.queue.id
-            ? { ...item, status: payload.queue.status }
+            ? {
+              ...item,
+              status: payload.queue.status,
+              capacity: payload.queue.capacity,
+              isFull: payload.queue.isFull,
+            }
             : item
         )
       );
@@ -246,7 +257,12 @@ export default function OperatorLiveQueuesPage() {
       setQueues((prev) =>
         prev.map((item) =>
           item.id === data.queue.id
-            ? { ...item, status: data.queue.status }
+            ? {
+              ...item,
+              status: data.queue.status,
+              capacity: data.queue.capacity,
+              isFull: data.queue.isFull,
+            }
             : item
         )
       );
@@ -448,7 +464,7 @@ export default function OperatorLiveQueuesPage() {
             <div className="p-8 text-center text-red-500">Queue not found.</div>
           ) : (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
                   <div className="text-sm font-medium text-slate-600">
                     Waiting
@@ -473,7 +489,27 @@ export default function OperatorLiveQueuesPage() {
                     {nowServing ? nowServing.number : "None"}
                   </div>
                 </div>
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                  <div className="text-sm font-medium text-slate-600">
+                    Capacity
+                  </div>
+                  <div className="text-2xl font-bold text-slate-900 mt-1">
+                    {queue.capacity ?? "—"}
+                  </div>
+                  <div
+                    className={`text-sm mt-1 ${queue.isFull ? "text-red-600" : "text-green-600"
+                      }`}
+                  >
+                    {queue.isFull ? "Full" : "Accepting"}
+                  </div>
+                </div>
               </div>
+
+              {queue.isFull && (
+                <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3">
+                  Queue is full. New joins are blocked until capacity frees up.
+                </div>
+              )}
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
                 <div className="lg:col-span-1 space-y-6">

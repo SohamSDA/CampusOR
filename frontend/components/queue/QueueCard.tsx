@@ -14,7 +14,7 @@ export default function QueueCard({ queue }: QueueCardProps) {
         return "bg-[#16A34A]"; // Success (Open)
       case "paused":
         return "bg-[#D97706]"; // Warning (Paused)
-      case "closed":
+      case "full":
         return "bg-[#DC2626]"; // Danger (Full / Closed)
       default:
         return "bg-[#16A34A]";
@@ -27,7 +27,7 @@ export default function QueueCard({ queue }: QueueCardProps) {
         return { label: "Live", color: "#16A34A" };
       case "paused":
         return { label: "Paused", color: "#D97706" };
-      case "closed":
+      case "full":
         return { label: "Full", color: "#DC2626" };
       case "serving":
         return { label: "Serving", color: "#2563EB" };
@@ -86,7 +86,8 @@ export default function QueueCard({ queue }: QueueCardProps) {
               Queue Length
             </span>
             <span className="font-normal text-gray-700">
-              {queue.queueLength} people
+              {queue.queueLength}
+              {queue.capacity ? ` / ${queue.capacity}` : ""} people
             </span>
           </div>
           <div className="flex justify-between items-baseline">
